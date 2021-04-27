@@ -1,0 +1,13 @@
+{
+	"InputFile": "~/test/zone1_airquality_*.csv",
+	"TargetPackage": "iot-test",
+	"TargetResource": "air-quality",
+	"PrimaryKey": "DateTime, Sensor_id",
+	"Truncate": false,
+	"Processed": "",
+	"StartTime": "",
+	"EndTime": "",
+	"Elapsed": "",
+	"ReturnCode": "",
+	"ReturnCodeMsg": ""
+}
