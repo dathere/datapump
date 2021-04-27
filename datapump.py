@@ -4,9 +4,12 @@ import click
 import click_config_file
 from ckanapi import RemoteCKAN
 import pandas as pd
+import json
+import os
 
-
-ua = 'datapump/1.0'
+# global variables
+gua = 'datapump/1.0'
+gloglevel = 'info'
 
 logging.basicConfig(
     filename='./datapump.log',
@@ -30,6 +33,13 @@ def logecho(message, level='info', verbose=False):
     else:
         logging.info(message)
         click.echo(message) if verbose else False
+
+
+def readjob(job):
+    with open(job) as f:
+        jobdefn = json.load(f)
+
+    return jobdefn
 
 
 @click.command()
@@ -59,20 +69,39 @@ def logecho(message, level='info', verbose=False):
 @click.option('--verbose',
               is_flag=True,
               help='Show more information while processing.')
+@click.option('--debug',
+              is_flag=True,
+              help='Enable debugging.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
-def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose):
+def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
+             debug):
     """Pumps data into CKAN using a simple directory-based queueing system."""
     logging.info('Starting datapump...')
 
+    if debug:
+        logging.setLevel(logging.DEBUG)
+        gloglevel = 'debug'
+    else:
+        gloglevel = 'info'
+
+    # log into CKAN
     try:
-        portal = RemoteCKAN(host, apikey=apikey, user_agent=ua)
+        portal = RemoteCKAN(host, apikey=apikey, user_agent=gua)
     except:
         logecho('Cannot connect to host %s' %
                 host, level='error', verbose=verbose)
         sys.exit()
     else:
         logecho('Connected to host %s' % host, verbose=verbose)
-    groups = portal.action.group_list()
+
+    # read jobs
+    jobs = os.scandir(inputdir)
+    for job in jobs:
+        if (not job.name.startswith('.') and job.name.endswith('-job.json') and
+                job.is_file()):
+            logecho('Reading job - %s' % job, verbose=verbose)
+            jobdefn = readjob(job)
+            logecho(json.dumps(jobdefn), level=gloglevel, verbose=verbose)
 
     logging.info('Ending datapump...')
 
