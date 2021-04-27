@@ -1,5 +1,5 @@
 {
-	"InputFile": "~/test/zone1_airquality_*.csv",
+	"InputFile": "./samples/zone1_airquality_*.csv",
 	"TargetPackage": "iot-test",
 	"TargetResource": "air-quality",
 	"PrimaryKey": "DateTime, Sensor_id",
