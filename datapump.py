@@ -6,10 +6,12 @@ from ckanapi import RemoteCKAN
 import pandas as pd
 import json
 import os
+import glob
 
 # global variables
 gua = 'datapump/1.0'
 gloglevel = 'info'
+gverbose = False
 
 logging.basicConfig(
     filename='./datapump.log',
@@ -17,29 +19,41 @@ logging.basicConfig(
     force=True,
     level=logging.INFO
 )
+glogger = logging.getLogger('')
 
 # helper for logging to file and console
-def logecho(message, level='info', verbose=False):
+def logecho(message, level='info'):
     message = level.upper() + ': ' + message
     if level == 'error':
         logging.error(message)
-        click.echo(Fore.RED + message, err=True) if verbose else False
+        click.echo(Fore.RED + message, err=True) if gverbose else False
     elif level == 'warning':
         logging.warning(message)
-        click.echo(Fore.YELLOW + message) if verbose else False
+        click.echo(Fore.YELLOW + message) if gverbose else False
     elif level == 'debug':
         logging.debug(message)
-        click.echo(Fore.GREEN + message) if verbose else False
+        click.echo(Fore.GREEN + message) if gverbose else False
     else:
         logging.info(message)
-        click.echo(message) if verbose else False
+        click.echo(message) if gverbose else False
 
 
 def readjob(job):
     with open(job) as f:
-        jobdefn = json.load(f)
+        try:
+            jobdefn = json.load(f)
+        except ValueError as e:
+            return False
+        else:
+            return jobdefn
 
-    return jobdefn
+
+def runjob(job):
+    inputfiles = glob.glob(job['InputFile'])
+    logecho('%s file/s found for %s: ' % (len(inputfiles), job['InputFile']) +
+            ', '.join(inputfiles), level=gloglevel)
+    latestfile = max(inputfiles, key=os.path.getctime)
+    logecho('Latest file: %s' % latestfile, level=gloglevel)
 
 
 @click.command()
@@ -79,29 +93,33 @@ def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
     logging.info('Starting datapump...')
 
     if debug:
-        logging.setLevel(logging.DEBUG)
+        glogger.setLevel(logging.DEBUG)
         gloglevel = 'debug'
     else:
         gloglevel = 'info'
+
+    gverbose = verbose
 
     # log into CKAN
     try:
         portal = RemoteCKAN(host, apikey=apikey, user_agent=gua)
     except:
         logecho('Cannot connect to host %s' %
-                host, level='error', verbose=verbose)
+                host, level='error')
         sys.exit()
     else:
-        logecho('Connected to host %s' % host, verbose=verbose)
+        logecho('Connected to host %s' % host)
 
     # read jobs
     jobs = os.scandir(inputdir)
     for job in jobs:
         if (not job.name.startswith('.') and job.name.endswith('-job.json') and
                 job.is_file()):
-            logecho('Reading job - %s' % job, verbose=verbose)
+            logecho('Reading job - %s' % job)
             jobdefn = readjob(job)
-            logecho(json.dumps(jobdefn), level=gloglevel, verbose=verbose)
+            if jobdefn:
+                logecho(json.dumps(jobdefn), level=gloglevel)
+                runjob(jobdefn)
 
     logging.info('Ending datapump...')
 
