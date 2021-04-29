@@ -1,8 +1,9 @@
 {
 	"InputFile": "./samples/zone1_airquality_*.csv",
+	"TargetOrg": "etl-test",
 	"TargetPackage": "iot-test",
 	"TargetResource": "air-quality",
-	"PrimaryKey": "DateTime, Sensor_id",
+	"PrimaryKey": "DateTime,Sensor_id",
 	"Truncate": false,
 	"Processed": "",
 	"StartTime": "",
