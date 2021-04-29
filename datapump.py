@@ -126,7 +126,6 @@ def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
         # process files, order by most recent
         inputfiles.sort(key=os.path.getmtime, reverse=True)
         for inputfile in inputfiles:
-            logindent = 3
             logecho('    Processing: %s...' % inputfile)
 
             def custom_date_parser(x): return datetime.strptime(
@@ -259,7 +258,7 @@ def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
         t1_stop = perf_counter()
         t1_stopdt = datetime.now()
 
-        job["Processed"] = len(df.index)
+        job["Processed"] = len(df.index) if 'df' in locals() else 0
         job["StartTime"] = t1_startdt.strftime('%Y-%m-%d %H:%M:%S')
         job["EndTime"] = t1_stopdt.strftime('%Y-%m-%d %H:%M:%S')
         job["Elapsed"] = t1_stop - t1_start
