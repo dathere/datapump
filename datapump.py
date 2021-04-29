@@ -12,24 +12,22 @@ from time import perf_counter
 import shutil
 
 
-@click.command()
+@click.command(context_settings=dict(max_content_width=120))
 @click.option('--inputdir',
               type=click.Path(exists=True),
-              default='./input/',
+              default='./input',
               show_default=True,
               help='The directory where the job files are located.')
 @click.option('--processeddir',
               type=click.Path(exists=True),
-              default='./processed/',
+              default='./processed',
               show_default=True,
-              help='The directory where successfully processed job '
-              'files are moved.')
+              help='The directory where successfully processed job files are moved.')
 @click.option('--problemsdir',
               type=click.Path(exists=True),
-              default='./problems/',
+              default='./problems',
               show_default=True,
-              help='The directory where job that were not successfully '
-              'processed are moved.')
+              help='The directory where unsuccessful job files are moved.')
 @click.option('--host',
               required=True,
               help='CKAN host.')
@@ -41,16 +39,21 @@ import shutil
               help='Show more information while processing.')
 @click.option('--debug',
               is_flag=True,
-              help='Enable debugging.')
+              help='Show debugging messages.')
+@click.option('--logfile',
+              type=click.Path(),
+              default='./datapump.log',
+              show_default=True,
+              help='The full path of the log file.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
 def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
-             debug):
+             debug, logfile):
     """Pumps data into CKAN using a simple directory-based queueing system."""
 
     ua = 'datapump/1.0'
 
     logging.basicConfig(
-        filename='./datapump.log',
+        filename=logfile,
         format='%(asctime)s - %(levelname)s - %(message)s',
         force=True,
         level=logging.INFO
