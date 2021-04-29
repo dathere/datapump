@@ -11,6 +11,7 @@ python3 -m venv datapumpenv
 . datapumpenv/bin/activate
 cd datapumpenv
 git clone https://github.com/dathere/datapump.git
+cd datapump
 pip install -r requirements.txt
 ```
 
@@ -19,7 +20,7 @@ Usage:
 
 ```
 . datapumpenv/bin/activate
-cd datapumpenv
+cd datapumpenv/datapump
 python datapump.py --config datapump.ini
 ```
 
