@@ -24,7 +24,7 @@ python datapump.py --config datapump.ini
 ```
 
 Command line parameters:
-========================
+------------------------
 
 ```
 python datapump.py --help
@@ -48,4 +48,13 @@ Options:
   --debug              Enable debugging.
   --config FILE        Read configuration from FILE.
   --help               Show this message and exit.
+```
+
+Note that parameters can be passed in priority order - through environment variables, a config file, or through the command line interface.
+
+Environment variables should be all caps and prefixed with `DATAPUMP_`, for example:
+
+```
+export DATAPUMP_APIKEY="MYCKANAPIKEY"
+export DATAPUMP_HOST="https://ckan.example.com"
 ```
