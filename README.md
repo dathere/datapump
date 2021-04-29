@@ -1,5 +1,5 @@
 # datapump
-pump data into the CKAN datastore using simple filesystem based queueing.
+Pump time-series data into the CKAN datastore using a simple filesystem-based queueing system.
 
 Requires: Python 3.8
 

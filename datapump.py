@@ -10,6 +10,7 @@ import glob
 from datetime import datetime
 from time import perf_counter
 import shutil
+import dateparser
 
 
 @click.command(context_settings=dict(max_content_width=120))
@@ -28,6 +29,14 @@ import shutil
               default='./problems',
               show_default=True,
               help='The directory where unsuccessful job files are moved.')
+@click.option('--datecolumn',
+              default='DateTime',
+              show_default=True,
+              help='The name of the datetime column.')
+@click.option('--dateformats',
+              default='%y-%m-%d %H:%M:%S, %y/%m/%d %H:%M:%S, %Y-%m-%d %H:%M:%S, %Y/%m/%d %H:%M:%S',
+              show_default=True,
+              help='List of dateparser format strings to try one by one. See https://dateparser.readthedocs.io')
 @click.option('--host',
               required=True,
               help='CKAN host.')
@@ -46,20 +55,10 @@ import shutil
               show_default=True,
               help='The full path of the log file.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
-def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
-             debug, logfile):
-    """Pumps data into CKAN using a simple directory-based queueing system."""
-
-    ua = 'datapump/1.0'
-
-    logging.basicConfig(
-        filename=logfile,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        force=True,
-        level=logging.INFO
-    )
-    logger = logging.getLogger('')
-    org_list = []
+def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
+             host, apikey, verbose, debug, logfile):
+    """Pumps time-series data into CKAN using a simple filesystem-based
+    queueing system."""
 
     # helper for logging to file and console
     def logecho(message, level='info'):
@@ -78,6 +77,21 @@ def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
         else:
             logging.info(message)
             click.echo(message)
+
+    ua = 'datapump/1.0'
+    dateformats_list = dateformats.split(', ')
+
+    logecho('DATEFORMATS: %s' % dateformats_list, level='debug')
+
+    logging.basicConfig(
+        filename=logfile,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        force=True,
+        level=logging.INFO
+    )
+    logger = logging.getLogger('')
+    org_list = []
+
 
     def _get_col_dtype(col):
         if col.dtype == "object":
@@ -128,10 +142,11 @@ def datapump(inputdir, processeddir, problemsdir, host, apikey, verbose,
         for inputfile in inputfiles:
             logecho('    Processing: %s...' % inputfile)
 
-            def custom_date_parser(x): return datetime.strptime(
-                x, "%y/%m/%d %H:%M:%S")
+            def custom_date_parser(x): return dateparser.parse(
+                x, date_formats=dateformats_list)
+
             df = pd.read_csv(inputfile, parse_dates=[
-                             'DateTime'], date_parser=custom_date_parser)
+                             datecolumn], date_parser=custom_date_parser)
 
             colname_list = df.columns.tolist()
 
