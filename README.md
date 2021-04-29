@@ -33,19 +33,14 @@ Usage: datapump.py [OPTIONS]
   Pumps data into CKAN using a simple directory-based queueing system.
 
 Options:
-  --inputdir PATH      The directory where the job files are located.
-                       [default: ./input/]
-
-  --processeddir PATH  The directory where successfully processed job files
-                       are moved.  [default: ./processed/]
-
-  --problemsdir PATH   The directory where job that were not successfully
-                       processed are moved.  [default: ./problems/]
-
+  --inputdir PATH      The directory where the job files are located.  [default: ./input]
+  --processeddir PATH  The directory where successfully processed job files are moved.  [default: ./processed]
+  --problemsdir PATH   The directory where unsuccessful job files are moved.  [default: ./problems]
   --host TEXT          CKAN host.  [required]
   --apikey TEXT        CKAN api key to use.  [required]
   --verbose            Show more information while processing.
-  --debug              Enable debugging.
+  --debug              Show debugging messages.
+  --logfile PATH       The full path of the log file.  [default: ./datapump.log]
   --config FILE        Read configuration from FILE.
   --help               Show this message and exit.
 ```
