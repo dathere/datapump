@@ -54,8 +54,8 @@ Usage: datapump.py [OPTIONS]
 
 Options:
   --inputdir PATH      The directory where the job files are located.  [default: ./input]
-  --processeddir PATH  The directory where successfully processed job files are moved.  [default: ./processed]
-  --problemsdir PATH   The directory where unsuccessful job files are moved.  [default: ./problems]
+  --processeddir PATH  The directory where successfully processed inputfiles are moved.  [default: ./processed]
+  --problemsdir PATH   The directory where unsuccessful inputfiles are moved.  [default: ./problems]
   --datecolumn TEXT    The name of the datetime column.  [default: DateTime]
   --dateformats TEXT   List of dateparser format strings to try one by one. See https://dateparser.readthedocs.io
                        [default: %y-%m-%d %H:%M:%S, %y/%m/%d %H:%M:%S, %Y-%m-%d %H:%M:%S, %Y/%m/%d %H:%M:%S]
@@ -64,7 +64,7 @@ Options:
   --apikey TEXT        CKAN api key to use.  [required]
   --verbose            Show more information while processing.
   --debug              Show debugging messages.
-  --logfile PATH       The full path of the log file.  [default: ./datapump.log]
+  --logfile PATH       The full path of the main log file.  [default: ./datapump.log]
   --config FILE        Read configuration from FILE.
   --help               Show this message and exit.
 ```

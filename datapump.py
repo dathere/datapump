@@ -390,7 +390,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
     org_list = portal.action.organization_list()
 
-    # read jobs
+    # process jobs
     jobs = os.scandir(inputdir)
     for job in jobs:
         if (not job.name.startswith('.') and job.name.endswith('-job.json') and
