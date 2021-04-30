@@ -285,7 +285,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             elapsed = t1_stop - t1_start
 
             if inputfile_error:
-                # job failed, move to problemsdir
+                # inputfile processing failed, move to problemsdir
                 try:
                     shutil.move(inputfile, problemsdir)
                 except Exception as e:
@@ -298,7 +298,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     inputfile, starttime, endtime, elapsed, inputfile_errordetails)
                 problems_logger.info(error_details)
             else:
-                # job was successfully processed, move to processeddir
+                # inputfile was successfully processed, move to processeddir
                 try:
                     shutil.move(inputfile, processeddir)
                 except Exception as e:
