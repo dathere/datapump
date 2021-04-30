@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-
+version = '1.1'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -86,12 +86,12 @@ def setup_logger(name, log_file, level=logging.INFO):
               show_default=True,
               help='The full path of the main log file.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
+@click.version_option(version)
 def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
              host, apikey, verbose, debug, logfile):
     """Pumps time-series data into CKAN using a simple filesystem-based
     queueing system."""
 
-    ua = 'datapump/1.0'
     dateformats_list = dateformats.split(', ')
 
     logger = setup_logger('mainlogger', logfile,
@@ -376,11 +376,12 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         logecho('  Processed %s file/s...' % len(inputfiles))
 
     # datapump func main
-    logecho('Starting datapump...')
+    logecho('Starting datapump/%s...' % version)
 
     # log into CKAN
     try:
-        portal = RemoteCKAN(host, apikey=apikey, user_agent=ua)
+        portal = RemoteCKAN(host, apikey=apikey,
+                            user_agent='datapump/' + version)
     except:
         logecho('Cannot connect to host %s' %
                 host, level='error')
