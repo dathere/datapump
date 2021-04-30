@@ -66,6 +66,7 @@ Options:
   --debug              Show debugging messages.
   --logfile PATH       The full path of the main log file.  [default: ./datapump.log]
   --config FILE        Read configuration from FILE.
+  --version            Show the version and exit.
   --help               Show this message and exit.
 ```
 
