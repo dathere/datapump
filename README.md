@@ -19,7 +19,7 @@ pip install -r requirements.txt
 Windows CMD:
 ```
 python3 -m venv datapumpenv
-datapumpvenv/Scripts/activate
+datapumpvenv\Scripts\activate
 cd datapumpenv
 git clone https://github.com/dathere/datapump.git
 cd datapump
@@ -38,8 +38,8 @@ python datapump.py --config datapump.ini
 
 Windows CMD:
 ```
-datapumpenv/Scripts/activate
-cd datapumpenv/datapump
+datapumpenv\Scripts\activate
+cd datapumpenv\datapump
 python datapump.py --config datapump.ini
 ```
 
