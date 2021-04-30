@@ -5,3 +5,4 @@ click_config_file
 ckanapi
 pandas
 dateparser
+jsonschema

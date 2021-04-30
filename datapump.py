@@ -11,8 +11,23 @@ from datetime import datetime
 from time import perf_counter
 import shutil
 import dateparser
+from jsonschema import validate
+
 
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+
+jobschema = {
+    "type": "object",
+    "properties": {
+            "InputFile": {"type": "string"},
+            "TargetOrg": {"type": "string"},
+            "TargetPackage": {"type": "string"},
+            "TargetResource": {"type": "string"},
+            "PrimaryKey": {"type": "string"},
+            "Dedupe": {"type": "string", "enum": ["first", "last"]},
+            "Truncate": {"type": "boolean"}
+    }
+}
 
 
 def setup_logger(name, log_file, level=logging.INFO):
@@ -131,7 +146,13 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             except ValueError as e:
                 return False
             else:
-                return jobdefn
+                try:
+                    validate(instance=jobdefn, schema=jobschema)
+                except Exception as e:
+                    logecho(str(e), level='error')
+                    return False
+                else:
+                    return jobdefn
 
     # helper for running jobs
     def runjob(job):
@@ -164,7 +185,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 # first, count number of dupe rows for logging
                 dupecount = df.duplicated(subset=pkey_list, keep='first').sum()
 
-                dedupe_flag = job['Dedupe'].lower()
+                dedupe_flag = job['Dedupe']
                 if dedupe_flag == 'first' or dedupe_flag == 'last':
                     df.drop_duplicates(
                         subset=pkey_list, keep=dedupe_flag, inplace=True)

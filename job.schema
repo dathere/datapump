@@ -1,0 +1,12 @@
+{
+    "type": "object",
+    "properties": {
+            "InputFile": {"type": "string"},
+            "TargetOrg": {"type": "string"},
+            "TargetPackage": {"type": "string"},
+            "TargetResource": {"type": "string"},
+            "PrimaryKey": {"type": "string"},
+            "Dedupe": {"type": "string", "enum": ["first", "last"]},
+            "Truncate": {"type": "boolean"}
+    }
+}
