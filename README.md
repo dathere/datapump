@@ -58,3 +58,27 @@ Environment variables should be all caps and prefixed with `DATAPUMP_`, for exam
 export DATAPUMP_APIKEY="MYCKANAPIKEY"
 export DATAPUMP_HOST="https://ckan.example.com"
 ```
+
+Job JSON
+--------
+
+The input directory is scanned for `*-job.json` files in date descending order, executing each job per the JSON configuration.
+
+For example:
+
+```
+{
+	"InputFile": "./samples/zone1_airquality_*.csv",
+	"TargetOrg": "etl-test",
+	"TargetPackage": "iot-test",
+	"TargetResource": "air-quality",
+	"PrimaryKey": "DateTime,Sensor_id",
+	"Dedupe": "last",
+	"Truncate": false
+}
+```
+
+Note the `Dedupe` attribute specifies if datapump should automatically handle duplicate rows as per the `PrimaryKey` attribute.
+It can be set to `first`, `last` or ''.
+
+`first` : Drop duplicates except for the first occurrence. - `last` : Drop duplicates except for the last occurrence. - '' : Do not drop duplicates.
