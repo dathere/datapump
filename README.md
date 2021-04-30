@@ -70,7 +70,7 @@ Options:
   --help               Show this message and exit.
 ```
 
-Note that parameters can be passed in priority order - through environment variables, a config file, or through the command line interface.
+Note that parameters are parsed and processed in priority order - through environment variables, a config file, or through the command line interface.
 
 Environment variables should be all caps and prefixed with `DATAPUMP_`, for example:
 
