@@ -31,12 +31,16 @@ Command line parameters:
 python datapump.py --help
 Usage: datapump.py [OPTIONS]
 
-  Pumps data into CKAN using a simple directory-based queueing system.
+  Pumps time-series data into CKAN using a simple filesystem-based queueing system.
 
 Options:
   --inputdir PATH      The directory where the job files are located.  [default: ./input]
   --processeddir PATH  The directory where successfully processed job files are moved.  [default: ./processed]
   --problemsdir PATH   The directory where unsuccessful job files are moved.  [default: ./problems]
+  --datecolumn TEXT    The name of the datetime column.  [default: DateTime]
+  --dateformats TEXT   List of dateparser format strings to try one by one. See https://dateparser.readthedocs.io
+                       [default: %y-%m-%d %H:%M:%S, %y/%m/%d %H:%M:%S, %Y-%m-%d %H:%M:%S, %Y/%m/%d %H:%M:%S]
+
   --host TEXT          CKAN host.  [required]
   --apikey TEXT        CKAN api key to use.  [required]
   --verbose            Show more information while processing.
