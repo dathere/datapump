@@ -215,7 +215,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         logecho('    Cannot create package "%s"!' %
                                 job['TargetPackage'], level='error')
                         inputfile_error = True
-                        inputfile_errordetails = e.message
+                        inputfile_errordetails = str(e)
                         package = ''
                     else:
                         logecho('    Created package "%s"...' %
@@ -248,7 +248,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     except Exception as e:
                         logecho('    Upsert failed', level='error')
                         inputfile_error = True
-                        inputfile_errordetails = e.message
+                        inputfile_errordetails = str(e)
                     else:
                         logecho('    Upsert successful! %s rows...' % len(data_dict))
                 else:
@@ -272,7 +272,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         logecho('    Cannot create resource "%s"!' %
                                 job['TargetResource'], level='error')
                         inputfile_error = True
-                        inputfile_errordetails = e.message
+                        inputfile_errordetails = str(e)
                     else:
                         logecho('    Created resource "%s"...' %
                                 job['TargetResource'])
@@ -291,7 +291,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     shutil.move(inputfile, problemsdir)
                 except Exception as e:
                     errmsg = 'Cannot move %s to %s: %s' % (
-                        inputfile, problemsdir, e.message)
+                        inputfile, problemsdir, str(e))
                     logecho(errmsg, level='error')
                     problems_logger.error(errmsg)
 
@@ -304,7 +304,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     shutil.move(inputfile, processeddir)
                 except Exception as e:
                     errmsg = 'Cannot move %s to %s: %s' % (
-                        inputfile, processeddi, e.message)
+                        inputfile, processeddi, str(e))
                     logecho(errmsg, level='error')
                     processed_logger.error(errmsg)
 
