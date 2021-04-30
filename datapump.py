@@ -216,6 +216,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                                 job['TargetPackage'], level='error')
                         inputfile_error = True
                         inputfile_errordetails = e.message
+                        package = ''
                     else:
                         logecho('    Created package "%s"...' %
                                 job['TargetPackage'])
@@ -228,13 +229,13 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
                 # now check if resource name already exists in package
                 resource_exists = False
-                resources = package['resources']
+                resources = package.get('resources')
                 for resource in resources:
                     if resource['name'] == job['TargetResource']:
                         resource_exists = True
                         break
 
-                if resource_exists:
+                if package and resource_exists:
                     logecho('    "%s" exists in package "%s". Doing datastore_upsert...' % (
                         job['TargetResource'], job['TargetPackage']))
                     try:
