@@ -1,0 +1,10 @@
+{
+    "InputFile": "./samples/MedicalCenter_FloodSensor*.csv",
+    "TargetOrg": "etl-test",
+    "TargetPackage": "iot-test",
+    "TargetResource": "medicalcenter_floodsensor",
+    "PrimaryKey": "DateTime,Sensor_id",
+    "Dedupe": "last",
+    "Truncate": false
+}
+	

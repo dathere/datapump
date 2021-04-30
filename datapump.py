@@ -5,6 +5,7 @@ import click_config_file
 from ckanapi import RemoteCKAN
 import pandas as pd
 import json
+import sys
 import os
 import glob
 from datetime import datetime
@@ -99,6 +100,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         'processedlogger', processeddir + '/processed.log')
     problems_logger = setup_logger(
         'problemslogger', problemsdir + '/problems.log')
+    job_logger = setup_logger(
+        'joblogger', inputdir + '/job.log')
 
     # helper for logging to file and console
     def logecho(message, level='info'):
@@ -236,9 +239,9 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                             job['TargetPackage'])
 
                     if not (job['TargetOrg'] in org_list):
-                        logecho('TargetOrg "%s" does not exist!' %
-                                job['TargetOrg'], level='error')
-                        sys.exit()
+                        errmsg = 'TargetOrg "%s" does not exist!' % job['TargetOrg']
+                        logecho(errmsg, level='error')
+                        sys.exit(errmsg)
 
                     try:
                         package = portal.action.package_create(
@@ -271,10 +274,24 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         break
 
                 if package and resource_exists:
+
+                    if job['Truncate']:
+                        try:
+                            result = portal.action.datastore_delete(
+                                resource_id=resource['id'],
+                                force=True
+                            )
+                        except Exception as e:
+                            logecho('    Truncate failed',
+                                    level='error')
+                            inputfile_error = True
+                            inputfile_errordetails = str(e)
+
                     logecho('    "%s" exists in package "%s". Doing datastore_upsert...' % (
                         job['TargetResource'], job['TargetPackage']))
                     try:
                         result = portal.action.datastore_upsert(
+                            force=True,
                             resource_id=resource['id'],
                             records=data_dict,
                             method='upsert',
@@ -291,6 +308,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     logecho('    "%s" does not exist in package "%s". Doing datastore_create...' % (
                         job['TargetResource'], job['TargetPackage']))
 
+                    alias = '%s-%s-%s' % (job['TargetOrg'],
+                                          job['TargetPackage'], job['TargetResource'])
                     resource = {
                         "package_id": package['id'],
                         "format": "csv",
@@ -298,11 +317,14 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     }
                     try:
                         resource = portal.action.datastore_create(
+                            force=True,
                             resource=resource,
+                            aliases=alias,
                             fields=fields_dictlist,
                             records=data_dict,
                             primary_key=job['PrimaryKey'],
-                            indexes=job['PrimaryKey']
+                            indexes=job['PrimaryKey'],
+                            calculate_record_count=True
                         )
                     except Exception as e:
                         logecho('    Cannot create resource "%s"!' %
@@ -324,7 +346,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             if inputfile_error:
                 # inputfile processing failed, move to problemsdir
                 try:
-                    shutil.move(inputfile, problemsdir)
+                    shutil.move(inputfile, problemsdir + '/' +
+                                os.path.basename(inputfile))
                 except Exception as e:
                     errmsg = 'Cannot move %s to %s: %s' % (
                         inputfile, problemsdir, str(e))
@@ -337,7 +360,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             else:
                 # inputfile was successfully processed, move to processeddir
                 try:
-                    shutil.move(inputfile, processeddir)
+                    shutil.move(inputfile, processeddir + '/' +
+                                os.path.basename(inputfile))
                 except Exception as e:
                     errmsg = 'Cannot move %s to %s: %s' % (
                         inputfile, processeddir, str(e))
@@ -376,8 +400,10 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             if jobdefn:
                 logecho(json.dumps(jobdefn), level='debug')
                 runjob(jobdefn)
+                job_logger.info('%s executed' % job)
             else:
                 logecho('  Invalid job json', level='error')
+                job_logger.error('%s invalid' % job)
 
     logecho('Ending datapump...')
 
