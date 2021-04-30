@@ -78,7 +78,7 @@ For example:
 }
 ```
 
-Note the `Dedupe` attribute specifies if datapump should automatically handle duplicate rows using the `PrimaryKey` attribute.
-It can be set to `first`, `last` or ''.
+Note the `Dedupe` attribute specifies if datapump should automatically handle duplicate rows using the `PrimaryKey` attribute to determine duplication.
 
+It can be set to `first`, `last` or ''.
 `first` : Drop duplicates except for the first occurrence. - `last` : Drop duplicates except for the last occurrence. - '' : Do not drop duplicates.
