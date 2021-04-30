@@ -12,6 +12,21 @@ from time import perf_counter
 import shutil
 import dateparser
 
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+
+
+def setup_logger(name, log_file, level=logging.INFO):
+    """To setup as many loggers as you want"""
+
+    handler = logging.FileHandler(log_file)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+
+    return logger
+
 
 @click.command(context_settings=dict(max_content_width=120))
 @click.option('--inputdir',
@@ -60,40 +75,37 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
     """Pumps time-series data into CKAN using a simple filesystem-based
     queueing system."""
 
-    # helper for logging to file and console
-    def logecho(message, level='info'):
-        if level == 'error':
-            logging.error(message)
-            click.echo(Fore.RED + level.upper() + ': ' + Fore.WHITE +
-                       message, err=True) if verbose else False
-        elif level == 'warning':
-            logging.warning(message)
-            click.echo(Fore.YELLOW + level.upper() + ': ' +
-                       Fore.WHITE + message) if verbose else False
-        elif level == 'debug':
-            logging.debug(message)
-            click.echo(Fore.GREEN + level.upper() + ': ' +
-                       Fore.WHITE + message) if debug else False
-        else:
-            logging.info(message)
-            click.echo(message)
-
     ua = 'datapump/1.0'
     dateformats_list = dateformats.split(', ')
 
+    logger = setup_logger('mainlogger', logfile,
+                          logging.DEBUG if debug else logging.INFO)
+    processed_logger = setup_logger(
+        'processedlogger', processeddir + '/processed.log')
+    problems_logger = setup_logger(
+        'problemslogger', problemsdir + '/problems.log')
+
+    # helper for logging to file and console
+    def logecho(message, level='info'):
+        if level == 'error':
+            logger.error(message)
+            click.echo(Fore.RED + level.upper() + ': ' + Fore.WHITE +
+                       message, err=True) if verbose else False
+        elif level == 'warning':
+            logger.warning(message)
+            click.echo(Fore.YELLOW + level.upper() + ': ' +
+                       Fore.WHITE + message) if verbose else False
+        elif level == 'debug':
+            logger.debug(message)
+            click.echo(Fore.GREEN + level.upper() + ': ' +
+                       Fore.WHITE + message) if debug else False
+        else:
+            logger.info(message)
+            click.echo(message)
+
     logecho('DATEFORMATS: %s' % dateformats_list, level='debug')
 
-    logging.basicConfig(
-        filename=logfile,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        force=True,
-        level=logging.INFO
-    )
-    logger = logging.getLogger('')
-    org_list = []
-
-
-    def _get_col_dtype(col):
+    def get_col_dtype(col):
         if col.dtype == "object":
 
             try:
@@ -121,17 +133,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             else:
                 return jobdefn
 
-    # helper for updating job json file
-    def updatejob(job, jobinfo):
-        with open(job, 'w') as f:
-            json.dump(jobinfo, f, indent=4)
-
-    # helper for run job
+    # helper for running jobs
     def runjob(job):
-        joberror = False
-        joberrordetails = ''
-        t1_startdt = datetime.now()
-        t1_start = perf_counter()
 
         inputfiles = glob.glob(job['InputFile'])
         logecho('  %s file/s found for %s: ' %
@@ -140,6 +143,11 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         # process files, order by most recent
         inputfiles.sort(key=os.path.getmtime, reverse=True)
         for inputfile in inputfiles:
+            inputfile_error = False
+            inputfile_errordetails = ''
+            t1_startdt = datetime.now()
+            t1_start = perf_counter()
+
             logecho('    Processing: %s...' % inputfile)
 
             def custom_date_parser(x): return dateparser.parse(
@@ -152,7 +160,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
             coltype_list = []
             for column in df:
-                coltype_list.append(_get_col_dtype(df[column]))
+                coltype_list.append(get_col_dtype(df[column]))
 
             fields_dictlist = []
             for i in range(0, len(colname_list)):
@@ -204,10 +212,10 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                             owner_org=job['TargetOrg']
                         )
                     except Exception as e:
-                        logecho('Cannot create package "%s"!' %
+                        logecho('    Cannot create package "%s"!' %
                                 job['TargetPackage'], level='error')
-                        joberror = True
-                        joberrordetails = e
+                        inputfile_error = True
+                        inputfile_errordetails = e.message
                     else:
                         logecho('    Created package "%s"...' %
                                 job['TargetPackage'])
@@ -237,11 +245,11 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                             calculate_record_count=True
                         )
                     except Exception as e:
-                        logecho('Upsert failed', level='error')
-                        joberror = True
-                        joberrordetails = e
+                        logecho('    Upsert failed', level='error')
+                        inputfile_error = True
+                        inputfile_errordetails = e.message
                     else:
-                        logecho('    Upsert successful!')
+                        logecho('    Upsert successful! %s rows...' % len(data_dict))
                 else:
                     logecho('    "%s" does not exist in package "%s". Doing datastore_create...' % (
                         job['TargetResource'], job['TargetPackage']))
@@ -260,37 +268,54 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                             indexes=job['PrimaryKey']
                         )
                     except Exception as e:
-                        logecho('Cannot create resource "%s"!' %
+                        logecho('    Cannot create resource "%s"!' %
                                 job['TargetResource'], level='error')
-                        joberror = True
-                        joberrordetails = e
+                        inputfile_error = True
+                        inputfile_errordetails = e.message
                     else:
                         logecho('    Created resource "%s"...' %
                                 job['TargetResource'])
 
             logecho('RESOURCE: %s' % resource, level='debug')
 
-        t1_stop = perf_counter()
-        t1_stopdt = datetime.now()
+            t1_stop = perf_counter()
+            t1_stopdt = datetime.now()
+            starttime = t1_startdt.strftime('%Y-%m-%d %H:%M:%S')
+            endtime = t1_stopdt.strftime('%Y-%m-%d %H:%M:%S')
+            elapsed = t1_stop - t1_start
 
-        job["Processed"] = len(df.index) if 'df' in locals() else 0
-        job["StartTime"] = t1_startdt.strftime('%Y-%m-%d %H:%M:%S')
-        job["EndTime"] = t1_stopdt.strftime('%Y-%m-%d %H:%M:%S')
-        job["Elapsed"] = t1_stop - t1_start
-        if joberror:
-            job["ReturnCode"] = joberrordetails.args
-            job["ReturnCodeMsg"] = joberrordetails.message
-        else:
-            job["ReturnCode"] = 0
-            job["ReturnCodeMsg"] = ''
+            if inputfile_error:
+                # job failed, move to problemsdir
+                try:
+                    shutil.move(inputfile, problemsdir)
+                except Exception as e:
+                    errmsg = 'Cannot move %s to %s: %s' % (
+                        inputfile, problemsdir, e.message)
+                    logecho(errmsg, level='error')
+                    problems_logger.error(errmsg)
 
-        return job
+                error_details = '- FILE: %s START: %s END: %s ELAPSED: %s ERRMSG: %s' % (
+                    inputfile, starttime, endtime, elapsed, inputfile_errordetails)
+                problems_logger.info(error_details)
+            else:
+                # job was successfully processed, move to processeddir
+                try:
+                    shutil.move(inputfile, processeddir)
+                except Exception as e:
+                    errmsg = 'Cannot move %s to %s: %s' % (
+                        inputfile, processeddi, e.message)
+                    logecho(errmsg, level='error')
+                    processed_logger.error(errmsg)
+
+                processed = len(df.index) if 'df' in locals() else 0
+                processed_details = '- FILE: %s START: %s END: %s ELAPSED: %s PROCESSED: %s' % (
+                    inputfile, starttime, endtime, elapsed, processed)
+                processed_logger.info(processed_details)
+
+        logecho('  Processed %s file/s...' % len(inputfiles))
 
     # datapump func main
     logecho('Starting datapump...')
-
-    if debug:
-        logger.setLevel(logging.DEBUG)
 
     # log into CKAN
     try:
@@ -313,18 +338,9 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             jobdefn = readjob(job)
             if jobdefn:
                 logecho(json.dumps(jobdefn), level='debug')
-                jobinfo = runjob(jobdefn)
-
-            updatejob(job, jobinfo)
-
-            if jobinfo['ReturnCode'] == 0:
-                # job was successfully processed, move to processeddir
-                shutil.move(inputdir + '/' + job.name,
-                            processeddir + '/' + job.name)
+                runjob(jobdefn)
             else:
-                # job failed, move to problemsdir
-                shutil.move(inputdir + '/' + job.name,
-                            problemsdir + '/' + job.name)
+                logecho('  Invalid job json', level='error')
 
     logecho('Ending datapump...')
 
