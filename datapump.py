@@ -54,12 +54,12 @@ def setup_logger(name, log_file, level=logging.INFO):
               type=click.Path(exists=True),
               default='./processed',
               show_default=True,
-              help='The directory where successfully processed job files are moved.')
+              help='The directory where successfully processed inputfiles are moved.')
 @click.option('--problemsdir',
               type=click.Path(exists=True),
               default='./problems',
               show_default=True,
-              help='The directory where unsuccessful job files are moved.')
+              help='The directory where unsuccessful inputfiles are moved.')
 @click.option('--datecolumn',
               default='DateTime',
               show_default=True,
@@ -84,7 +84,7 @@ def setup_logger(name, log_file, level=logging.INFO):
               type=click.Path(),
               default='./datapump.log',
               show_default=True,
-              help='The full path of the log file.')
+              help='The full path of the main log file.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
 def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
              host, apikey, verbose, debug, logfile):
