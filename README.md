@@ -6,6 +6,7 @@ Requires: Python 3.8
 Installation:
 =============
 
+Linux, Mac, Windows Powershell:
 ```
 python3 -m venv datapumpenv
 . datapumpenv/bin/activate
@@ -15,11 +16,29 @@ cd datapump
 pip install -r requirements.txt
 ```
 
+Windows CMD:
+```
+python3 -m venv datapumpenv
+datapumpvenv/Scripts/activate
+cd datapumpenv
+git clone https://github.com/dathere/datapump.git
+cd datapump
+pip install -r requirements.txt
+```
+
 Usage:
 ======
 
+Linux, Mac, Windows Powershell:
 ```
 . datapumpenv/bin/activate
+cd datapumpenv/datapump
+python datapump.py --config datapump.ini
+```
+
+Windows CMD:
+```
+datapumpenv/Scripts/activate
 cd datapumpenv/datapump
 python datapump.py --config datapump.ini
 ```
