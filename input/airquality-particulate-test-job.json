@@ -4,11 +4,5 @@
 	"TargetPackage": "iot-test",
 	"TargetResource": "air-quality",
 	"PrimaryKey": "DateTime,Sensor_id",
-	"Truncate": false,
-	"Processed": "",
-	"StartTime": "",
-	"EndTime": "",
-	"Elapsed": "",
-	"ReturnCode": "",
-	"ReturnCodeMsg": ""
+	"Truncate": false
 }
