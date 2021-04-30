@@ -147,6 +147,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             inputfile_errordetails = ''
             t1_startdt = datetime.now()
             t1_start = perf_counter()
+            dupecount = 0
+            dupesremoved = 0
 
             logecho('    Processing: %s...' % inputfile)
 
@@ -155,6 +157,18 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
             df = pd.read_csv(inputfile, parse_dates=[
                              datecolumn], date_parser=custom_date_parser)
+
+            if job['Dedupe']:
+                pkey_list = list(job['PrimaryKey'].split(','))
+
+                # first, count number of dupe rows for logging
+                dupecount = df.duplicated(subset=pkey_list, keep='first').sum()
+
+                dedupe_flag = job['Dedupe'].lower()
+                if dedupe_flag == 'first' or dedupe_flag == 'last':
+                    df.drop_duplicates(
+                        subset=pkey_list, keep=dedupe_flag, inplace=True)
+                    dupesremoved = dupecount
 
             colname_list = df.columns.tolist()
 
@@ -250,7 +264,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         inputfile_error = True
                         inputfile_errordetails = str(e)
                     else:
-                        logecho('    Upsert successful! %s rows...' % len(data_dict))
+                        logecho('    Upsert successful! %s rows...' %
+                                len(data_dict))
                 else:
                     logecho('    "%s" does not exist in package "%s". Doing datastore_create...' % (
                         job['TargetResource'], job['TargetPackage']))
@@ -295,8 +310,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     logecho(errmsg, level='error')
                     problems_logger.error(errmsg)
 
-                error_details = '- FILE: %s START: %s END: %s ELAPSED: %s ERRMSG: %s' % (
-                    inputfile, starttime, endtime, elapsed, inputfile_errordetails)
+                error_details = '- FILE: %s START: %s END: %s ELAPSED: %s DUPES: %s/%s ERRMSG: %s' % (
+                    inputfile, starttime, endtime, elapsed, dupecount, dupesremoved, inputfile_errordetails)
                 problems_logger.info(error_details)
             else:
                 # inputfile was successfully processed, move to processeddir
@@ -309,8 +324,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     processed_logger.error(errmsg)
 
                 processed = len(df.index) if 'df' in locals() else 0
-                processed_details = '- FILE: %s START: %s END: %s ELAPSED: %s PROCESSED: %s' % (
-                    inputfile, starttime, endtime, elapsed, processed)
+                processed_details = '- FILE: %s START: %s END: %s ELAPSED: %s DUPES: %s/%s PROCESSED: %s' % (
+                    inputfile, starttime, endtime, elapsed, dupecount, dupesremoved, processed)
                 processed_logger.info(processed_details)
 
         logecho('  Processed %s file/s...' % len(inputfiles))
