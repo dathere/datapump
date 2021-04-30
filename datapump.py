@@ -304,7 +304,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     shutil.move(inputfile, processeddir)
                 except Exception as e:
                     errmsg = 'Cannot move %s to %s: %s' % (
-                        inputfile, processeddi, str(e))
+                        inputfile, processeddir, str(e))
                     logecho(errmsg, level='error')
                     processed_logger.error(errmsg)
 
