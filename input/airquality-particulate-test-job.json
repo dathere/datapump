@@ -5,5 +5,13 @@
 	"TargetResource": "air-quality",
 	"PrimaryKey": "DateTime,Sensor_id",
 	"Dedupe": "last",
-	"Truncate": false
+	"Truncate": false,
+    "Stats": [
+    	{"Kind": "descriptive"},
+    	{"Kind": "mode"},
+    	{"Kind": "H",
+    		"GroupBy": "Sensor_id",
+    		"DropColumns": "LAT,LONG"
+    	}
+    ]
 }

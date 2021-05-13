@@ -6,3 +6,4 @@ ckanapi
 pandas
 dateparser
 jsonschema
+openpyxl

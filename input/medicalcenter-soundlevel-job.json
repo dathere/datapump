@@ -1,0 +1,18 @@
+{
+    "InputFile": "./samples/MedicalCenter_Sound*.csv",
+    "TargetOrg": "etl-test",
+    "TargetPackage": "iot-test",
+    "TargetResource": "medicalcenter_soundlevel",
+    "PrimaryKey": "DateTime,Sensor_id",
+    "Dedupe": "last",
+    "Truncate": false,
+    "Stats": [
+    	{"Kind": "descriptive"},
+    	{"Kind": "mode"},
+    	{"Kind": "H",
+    		"GroupBy": "Sensor_id",
+    		"DropColumns": "LAT,LONG"
+    	}
+    ]
+}
+	
