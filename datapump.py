@@ -4,6 +4,7 @@ import click
 import click_config_file
 from ckanapi import RemoteCKAN
 import pandas as pd
+from pandas.tseries.frequencies import to_offset
 import json
 import sys
 import os
@@ -13,11 +14,25 @@ from time import perf_counter
 import shutil
 import dateparser
 from jsonschema import validate
+import re
 
 version = '1.1'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+
+    "definitions": {
+        "Stat": {
+            "type": "object",
+            "properties": {
+                "Kind": {"type": "string"},
+                "GroupBy": {"type": "string"},
+                "DropColumns": {"type": "string"}
+            }
+        }
+    },
+
     "type": "object",
     "properties": {
             "InputFile": {"type": "string"},
@@ -26,8 +41,15 @@ jobschema = {
             "TargetResource": {"type": "string"},
             "PrimaryKey": {"type": "string"},
             "Dedupe": {"type": "string", "enum": ["first", "last"]},
-            "Truncate": {"type": "boolean"}
-    }
+            "Truncate": {"type": "boolean"},
+            "Stats": {"type": "array",
+                      "contains": {
+                          "$ref": "#/definitions/Stat"
+                      }
+                      }
+    },
+    "required": ["InputFile", "TargetOrg", "TargetPackage", "TargetResource",
+                 "PrimaryKey", "Dedupe"]
 }
 
 
@@ -102,9 +124,10 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         'problemslogger', problemsdir + '/problems.log')
     job_logger = setup_logger(
         'joblogger', inputdir + '/job.log')
+    global data_df
 
-    # helper for logging to file and console
     def logecho(message, level='info'):
+        """helper for logging to file and console"""
         if level == 'error':
             logger.error(message)
             click.echo(Fore.RED + level.upper() + ': ' + Fore.WHITE +
@@ -124,14 +147,15 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
     logecho('DATEFORMATS: %s' % dateformats_list, level='debug')
 
     def get_col_dtype(col):
+        """helper to get column data type from dataframe
+        it returns both the CKAN friendly python/postgres data type
+        that can be used for datastore_create and the numpy data type"""
         if col.dtype == "object":
-
             try:
                 col_new = pd.to_datetime(col.dropna().unique())
                 return ['timestamp', 'datetime']
             except:
                 return ["text", 'string']
-
         elif col.dtype == 'float64':
             return ['float', 'float64']
         elif col.dtype == 'int64':
@@ -141,12 +165,247 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         else:
             return ['text', 'string']
 
-    # helper for reading job json file
+    def computestats(stats, primarykey, package, resource_id, resource_name, updatetime):
+        """ all, hourly, daily, lastndays, weekly, monthly, quarterly, annually, todate """
+
+        def savestat(saveinfo):
+
+            stats_dict = saveinfo[0]
+            fields_dictlist = saveinfo[1]
+            stats_name = saveinfo[2]
+            stats_desc = saveinfo[3]
+            primary_key = saveinfo[4]
+            logecho('STATS DATA: %s' % stats_dict, level='debug')
+
+            stats_exists = False
+            stats_error = False
+
+            logecho('STATS PACKAGE: %s' % package, level='debug')
+
+            resources = package.get('resources')
+            for resource in resources:
+                if resource['name'] == stats_name:
+                    stats_exists = True
+                    stats_resource_id = resource['id']
+                    break
+
+            if stats_exists:
+                logecho('STATS RESOURCE: %s' % resource, level='debug')
+
+                logecho('    Replacing old %s, %s' %
+                        (stats_name, stats_resource_id))
+                try:
+                    result = portal.action.datastore_upsert(
+                        force=True,
+                        resource_id=stats_resource_id,
+                        records=stats_dict,
+                        method='upsert',
+                        calculate_record_count=True
+                    )
+                except Exception as e:
+                    logecho('    Stats upsert failed',
+                            level='error')
+                    stats_error = True
+                    stats_errordetails = str(e)
+                else:
+                    logecho('STATS RESULT FOR CREATE: %s' %
+                            result, level='debug')
+
+            else:
+                resource = {
+                    "package_id": package['id'],
+                    "format": "csv",
+                    "name": stats_name
+                }
+
+                logecho('STATS RESOURCE FOR CREATE: %s' %
+                        resource, level='debug')
+
+                alias = '%s-%s-%s' % (package['organization']['name'],
+                                      package['name'], stats_name)
+
+                try:
+                    result = portal.action.datastore_create(
+                        force=True,
+                        resource=resource,
+                        aliases='',
+                        fields=fields_dictlist,
+                        primary_key=primary_key,
+                        records=stats_dict,
+                        calculate_record_count=False
+                    )
+                except Exception as e:
+                    logecho('    Cannot create resource "%s"!' %
+                            result, level='error')
+                    stats_error = True
+                    stats_errordetails = str(e)
+                else:
+                    logecho('    Created resource "%s"...' %
+                            result, level='debug')
+                    stats_resource_id = result['resource_id']
+
+                    result = portal.action.datastore_create(
+                        force=True,
+                        resource_id=stats_resource_id,
+                        aliases=alias,
+                        calculate_record_count=True
+                    )
+
+            if stats_error:
+                return '- STAT: %s ERRMSG: %s' % (stats_name, stats_errordetails)
+            else:
+                portal.action.resource_update(
+                    id=stats_resource_id,
+                    description='%s (UPDATED: %s)' % (stats_desc, updatetime))
+
+                return False
+
+        def getFields(stats_df):
+            # get column names and data types
+            # we need this to create the datastore table
+            colname_list = stats_df.columns.values.tolist()
+
+            coltype_list = []
+            for column in stats_df:
+                coltype_list.append(get_col_dtype(stats_df[column]))
+
+            fields_dictlist = []
+            for i in range(0, len(colname_list)):
+                fields_dictlist.append({
+                    "id": colname_list[i],
+                    "type": coltype_list[i][0]
+                })
+                if coltype_list[i][0] == 'timestamp':
+                    stats_df[colname_list[i]
+                             ] = stats_df[colname_list[i]].astype(str)
+
+            logecho('STATS FIELDS_DICTLIST: %s' %
+                    fields_dictlist, level='debug')
+
+            return fields_dictlist
+
+        def computefreqstat(freqKind, freqGroupBy, freqDropColumns):
+            """ resample time series dataa """
+            logecho("computing frequency resampling", level="debug")
+
+            if freqDropColumns:
+                dropcol_list = list(freqDropColumns.split(','))
+                data_df.drop(columns=dropcol_list, inplace=True)
+            freq_df = data_df.groupby(freqGroupBy).resample(freqKind).mean()
+            stats_name = resource_name + '-' + freqKind
+            stats_desc = 'Resampled - [%s](https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases)' % freqKind
+            # delete internal _id column
+            del freq_df[freq_df.columns[0]]
+
+            freq_df.droplevel(0).reset_index(inplace=True)
+
+            try:
+                freq_df.drop(columns=list(freqGroupBy.split(',')), inplace=True)
+            except Exception as e:
+                logecho('    WARNING: %s' % e)
+
+            freq_df.to_csv(stats_name + '-' + freqKind + '.csv')
+
+            freq2_df = pd.read_csv(stats_name + '-' + freqKind + '.csv', na_values='')
+            stats_dict = freq2_df.to_dict(orient='records')
+
+            fields_dictlist = getFields(freq2_df)
+
+            stats_sparse_dict = []
+            for stat_record in stats_dict:
+                sparse_record = {}
+                for (k, v) in stat_record.items():
+                    if not pd.isnull(v):
+                        sparse_record[k] = v
+                stats_sparse_dict.append(sparse_record)
+
+            logecho('STATS DATA: %s' % stats_sparse_dict, level='debug')
+
+            if not debug:
+                os.remove(stats_name + '-' + freqKind + '.csv')
+
+            return [stats_sparse_dict, fields_dictlist, stats_name, stats_desc, primarykey]
+
+        def computedescstat(mode):
+
+            if mode == 'descriptive':
+                stats_df = data_df.describe(
+                    include='all', datetime_is_numeric=True)
+                stats_name = resource_name + '-stats'
+                stats_desc = 'Descriptive statistics.'
+                del stats_df[stats_df.columns[0]]
+            else:
+                stats_df = data_df.drop(data_df.columns[[0]], axis=1)
+                stats_df = stats_df.mode()
+                stats_name = resource_name + '-mode'
+                stats_desc = 'Mode - values that appears most often.'
+
+            stats_df.index.name = 'stat'
+            stats_df.to_csv(stats_name + '.csv', index=True)
+
+            # we do the save and load to csv to get around pandas' problem
+            # of using numpy datatypes instead of native python data types when
+            # running pandas describe()
+            stats2_df = pd.read_csv(stats_name + '.csv', na_values='')
+            stats_dict = stats2_df.to_dict(orient='records')
+
+            # now get column names and data types
+            # we need this when calling datastore_create
+            fields_dictlist = getFields(stats_df)
+            if mode == 'descriptive':
+                fields_dictlist = [{ "id": "stat", "type": "text" }] + fields_dictlist
+
+            stats_sparse_dict = []
+            for stat_record in stats_dict:
+                sparse_record = {}
+                for (k, v) in stat_record.items():
+                    if not pd.isnull(v):
+                        sparse_record[k] = v
+                stats_sparse_dict.append(sparse_record)
+
+            logecho('STATS DATA: %s' % stats_sparse_dict, level='debug')
+
+            if not debug:
+                os.remove(stats_name + '.csv')
+
+            return [stats_sparse_dict, fields_dictlist, stats_name, stats_desc, 'stat']
+
+        # -----------  computestats MAIN --------------
+        logecho('    Retrieving complete %s file...' % resource_name)
+        data_df = pd.read_csv(host+'/datastore/dump/' +
+                              resource_id, parse_dates=[datecolumn], index_col=[datecolumn])
+
+        for stat in stats:
+            logecho('    Computing stat - %s' % stat["Kind"])
+            if stat["Kind"] == 'descriptive':
+                stat_info = computedescstat('descriptive')
+                statsave_error = savestat(stat_info)
+            elif stat["Kind"] == 'mode':
+                stat_info = computedescstat('mode')
+                statsave_error = savestat(stat_info)
+            else:
+                try:
+                    to_offset(stat["Kind"])
+                except Exception as e:
+                    logecho('    Invalid Stats Frequency',
+                            level='error')
+                    statsave_error = str(e)
+                else:
+                    stat_info = computefreqstat(
+                        stat["Kind"], stat["GroupBy"], stat["DropColumns"])
+                    statsave_error = savestat(stat_info)
+            if statsave_error:
+                problems_logger.info(statsave_error)
+
+        return
+
     def readjob(job):
+        """helper for reading job json file"""
         with open(job) as f:
             try:
                 jobdefn = json.load(f)
             except ValueError as e:
+                job_logger.error('Cannont load job json: %s', e)
                 return False
             else:
                 try:
@@ -157,9 +416,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 else:
                     return jobdefn
 
-    # helper for running jobs
     def runjob(job):
-
+        """helper for running jobs"""
         inputfiles = glob.glob(job['InputFile'])
         logecho('  %s file/s found for %s: ' %
                 (len(inputfiles), job['InputFile']))
@@ -170,9 +428,11 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             inputfile_error = False
             inputfile_errordetails = ''
             t1_startdt = datetime.now()
+            starttime = t1_startdt.strftime('%Y-%m-%d %H:%M:%S')
             t1_start = perf_counter()
             dupecount = 0
             dupesremoved = 0
+            resource_id = ''
 
             logecho('    Processing: %s...' % inputfile)
 
@@ -223,6 +483,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 logecho('    Resource "%s" is not a resource id.' %
                         job['TargetResource'])
                 resource = ''
+            else:
+                existing_resource_desc = resource['description']
 
             if not resource:
                 # resource doesn't exist. Check if package exists
@@ -267,12 +529,16 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
                 # now check if resource name already exists in package
                 resource_exists = False
+                existing_resource_desc = ''
                 resources = package.get('resources')
                 for resource in resources:
                     if resource['name'] == job['TargetResource']:
                         resource_exists = True
+                        existing_resource_desc = resource['description']
+                        resource_id = resource['id']
                         break
 
+                #resource_id = ''
                 if package and resource_exists:
 
                     if job['Truncate']:
@@ -287,8 +553,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                             inputfile_error = True
                             inputfile_errordetails = str(e)
 
-                    logecho('    "%s" exists in package "%s". Doing datastore_upsert...' % (
-                        job['TargetResource'], job['TargetPackage']))
+                    logecho('    "%s" (%s) exists in package "%s". Doing datastore_upsert...' % (
+                        job['TargetResource'], resource['id'], job['TargetPackage']))
                     try:
                         result = portal.action.datastore_upsert(
                             force=True,
@@ -304,6 +570,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     else:
                         logecho('    Upsert successful! %s rows...' %
                                 len(data_dict))
+                        #resource_id = result['resource_id']
+                        #resource_id = resource['id']
                 else:
                     logecho('    "%s" does not exist in package "%s". Doing datastore_create...' % (
                         job['TargetResource'], job['TargetPackage']))
@@ -319,12 +587,12 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         resource = portal.action.datastore_create(
                             force=True,
                             resource=resource,
-                            aliases=alias,
+                            aliases='',
                             fields=fields_dictlist,
                             records=data_dict,
                             primary_key=job['PrimaryKey'],
                             indexes=job['PrimaryKey'],
-                            calculate_record_count=True
+                            calculate_record_count=False
                         )
                     except Exception as e:
                         logecho('    Cannot create resource "%s"!' %
@@ -334,12 +602,42 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     else:
                         logecho('    Created resource "%s"...' %
                                 job['TargetResource'])
+                        resource_id = resource['resource_id']
+                        resource = portal.action.datastore_create(
+                            force=True,
+                            resource_id=resource_id,
+                            aliases=alias,
+                            calculate_record_count=True
+                        )
+
+            logecho('EXISTING DESC for resource %s: %s' %
+                    (resource_id, existing_resource_desc), level='debug')
+            updated_desc = ''
+            if existing_resource_desc:
+                result = re.split(r' \(UPDATED: (.*?)\)$',
+                                  existing_resource_desc)
+                if len(result) == 3:
+                    # there is an old update date
+                    updated_desc = result[0]
+                else:
+                    updated_desc = existing_resource_desc
+            updated_desc = updated_desc + ' (UPDATED: %s)' % starttime
+            logecho('RESOURCE UPDATED DESC: %s: %s' %
+                    (resource_id, updated_desc), level='debug')
+            portal.action.resource_update(
+                id=resource_id,
+                description=updated_desc)
 
             logecho('RESOURCE: %s' % resource, level='debug')
 
+            if job['Stats'] and resource_id:
+                logecho('    Computing stats...')
+                result = computestats(
+                    job['Stats'], job['PrimaryKey'], package, resource_id, job['TargetResource'],
+                    starttime)
+
             t1_stop = perf_counter()
             t1_stopdt = datetime.now()
-            starttime = t1_startdt.strftime('%Y-%m-%d %H:%M:%S')
             endtime = t1_stopdt.strftime('%Y-%m-%d %H:%M:%S')
             elapsed = t1_stop - t1_start
 
@@ -397,6 +695,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         if (not job.name.startswith('.') and job.name.endswith('-job.json') and
                 job.is_file()):
             logecho('  Reading job - %s' % job)
+            job_logger.info('Reading job - %s' % job)
             jobdefn = readjob(job)
             if jobdefn:
                 logecho(json.dumps(jobdefn), level='debug')
