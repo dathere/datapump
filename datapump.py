@@ -16,7 +16,7 @@ import dateparser
 from jsonschema import validate
 import re
 
-version = '1.1'
+version = '1.2'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -440,7 +440,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 x, date_formats=dateformats_list)
 
             df = pd.read_csv(inputfile, parse_dates=[
-                             datecolumn], date_parser=custom_date_parser)
+                             datecolumn], date_parser=custom_date_parser,
+                             skipinitialspace=True)
 
             if job['Dedupe']:
                 pkey_list = list(job['PrimaryKey'].split(','))
