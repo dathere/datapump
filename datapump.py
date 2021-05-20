@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-version = '1.2'
+version = '1.21'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -141,6 +141,29 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         else:
             return ['text', 'string']
 
+    def get_datadict_dtype(coltype):
+        if coltype == 'timestamp':
+            return 'string'
+        elif coltype.startswith('int'):
+            return 'int64'
+        elif coltype.startswith('float'):
+            return 'float64'
+        elif coltype == 'text':
+            return 'string'
+        else:
+            return coltype
+
+    def datastore_dictionary(resource_id):
+        try:
+            return [
+                f for f in portal.action.datastore_search(
+                    resource_id = resource_id,
+                    limit = 0,
+                    include_total = False)['fields']
+                if not f['id'].startswith('_')]
+        except:
+            return []
+
     # helper for reading job json file
     def readjob(job):
         with open(job) as f:
@@ -211,8 +234,6 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                     df[colname_list[i]] = df[colname_list[i]].astype(str)
 
             logecho('FIELDS_DICTLIST: %s' % fields_dictlist, level='debug')
-
-            data_dict = df.to_dict(orient='records')
 
             # check if resource exists
             # this works only when TargetResource is an existing
@@ -290,6 +311,23 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
                     logecho('    "%s" exists in package "%s". Doing datastore_upsert...' % (
                         job['TargetResource'], job['TargetPackage']))
+
+                    data_dictionary = datastore_dictionary(resource['id'])
+
+                    logecho('EXISTING DATADIC: %s' % data_dictionary, level='debug')
+
+                    # cast dataframe to use existing data types of resource
+                    cast_dict = {field_info['id']: get_datadict_dtype(field_info['type']) for field_info in data_dictionary}
+
+                    #logecho('CAST DICT: %s' % cast_dict, level='debug')
+
+                    df = df.astype(cast_dict)
+                    df.fillna('', inplace=True)
+
+                    data_dict = df.to_dict(orient='records')
+
+                    logecho('DATA_DICT: %s' % data_dict, level='debug')
+
                     try:
                         result = portal.action.datastore_upsert(
                             force=True,
@@ -316,6 +354,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         "format": "csv",
                         "name": job['TargetResource']
                     }
+                    data_dict = df.to_dict(orient='records')
                     try:
                         resource = portal.action.datastore_create(
                             force=True,
