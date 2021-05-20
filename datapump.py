@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-version = '1.21'
+version = '1.3'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
