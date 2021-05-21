@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-version = '1.3'
+version = '1.4'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -321,28 +321,34 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
 
                     #logecho('CAST DICT: %s' % cast_dict, level='debug')
 
-                    df = df.astype(cast_dict)
-                    df.fillna('', inplace=True)
-
-                    data_dict = df.to_dict(orient='records')
-
-                    logecho('DATA_DICT: %s' % data_dict, level='debug')
-
                     try:
-                        result = portal.action.datastore_upsert(
-                            force=True,
-                            resource_id=resource['id'],
-                            records=data_dict,
-                            method='upsert',
-                            calculate_record_count=True
-                        )
+                        df = df.astype(cast_dict)
                     except Exception as e:
-                        logecho('    Upsert failed', level='error')
+                        logecho('    Data Dictionary field mappings do not match! Skipping upsert...', level="warning")
                         inputfile_error = True
                         inputfile_errordetails = str(e)
                     else:
-                        logecho('    Upsert successful! %s rows...' %
-                                len(data_dict))
+                        df.fillna('', inplace=True)
+
+                        data_dict = df.to_dict(orient='records')
+
+                        logecho('DATA_DICT: %s' % data_dict, level='debug')
+
+                        try:
+                            result = portal.action.datastore_upsert(
+                                force=True,
+                                resource_id=resource['id'],
+                                records=data_dict,
+                                method='upsert',
+                                calculate_record_count=True
+                            )
+                        except Exception as e:
+                            logecho('    Upsert failed', level='error')
+                            inputfile_error = True
+                            inputfile_errordetails = str(e)
+                        else:
+                            logecho('    Upsert successful! %s rows...' %
+                                    len(data_dict))
                 else:
                     logecho('    "%s" does not exist in package "%s". Doing datastore_create...' % (
                         job['TargetResource'], job['TargetPackage']))
