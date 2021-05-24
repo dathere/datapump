@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-version = '1.4'
+version = '1.5'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -133,9 +133,9 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 return ["text", 'string']
 
         elif col.dtype == 'float64':
-            return ['float', 'float64']
+            return ['numeric', 'float64']
         elif col.dtype == 'int64':
-            return ['int', 'int64']
+            return ['numeric', 'int64']
         elif col.dtype == 'datetime64[ns]':
             return ['timestamp', 'datetime']
         else:
@@ -148,10 +148,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
             return 'int64'
         elif coltype.startswith('float'):
             return 'float64'
-        elif coltype == 'text':
-            return 'string'
         else:
-            return coltype
+            return 'string'
 
     def datastore_dictionary(resource_id):
         try:
@@ -328,9 +326,7 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                         inputfile_error = True
                         inputfile_errordetails = str(e)
                     else:
-                        df.fillna('', inplace=True)
-
-                        data_dict = df.to_dict(orient='records')
+                        data_dict = [ {k:v for k,v in m.items() if pd.notnull(v)} for m in df.to_dict(orient='rows')]
 
                         logecho('DATA_DICT: %s' % data_dict, level='debug')
 
