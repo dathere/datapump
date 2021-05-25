@@ -14,7 +14,7 @@ import shutil
 import dateparser
 from jsonschema import validate
 
-version = '1.5'
+version = '1.6'
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 
 jobschema = {
@@ -85,10 +85,13 @@ def setup_logger(name, log_file, level=logging.INFO):
               default='./datapump.log',
               show_default=True,
               help='The full path of the main log file.')
+@click.option('--purge',
+              is_flag=True,
+              help='Purge orphaned resources from the datastore.')
 @click_config_file.configuration_option(config_file_name='datapump.ini')
 @click.version_option(version)
 def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
-             host, apikey, verbose, debug, logfile):
+             host, apikey, verbose, debug, logfile, purge):
     """Pumps time-series data into CKAN using a simple filesystem-based
     queueing system."""
 
@@ -162,8 +165,68 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         except:
             return []
 
-    # helper for reading job json file
+    def purgedb():
+        '''Purge orphaned resources from the datastore using the datastore_delete
+        action, which drops tables when called without filters.'''
+
+        result = portal.action.datastore_search(
+            resource_id = '_table_metadata'
+        )
+
+        resource_id_list = []
+        for record in result['records']:
+            # ignore 'alias' records (views) as they are automatically
+            # deleted when the parent resource table is dropped
+            if record['alias_of']:
+                continue
+
+            try:
+                portal.action.resource_show(
+                    id = record['name']
+                )
+            except NotFound:
+                resource_id_list.append(record['name'])
+                click.echo("Resource '%s' orphaned - queued for drop" %
+                           record[u'name'])
+            except KeyError:
+                continue
+
+        orphaned_table_count = len(resource_id_list)
+        logecho('%d orphaned tables found.' % orphaned_table_count)
+
+        if not orphaned_table_count:
+            job_logger.info('No orphaned tables found.')
+            return 0
+
+        if debug or verbose:
+            if not click.confirm('Proceed with purge?'):
+                job_logger.info('Purge declined...')
+                return -1
+
+        # Drop the orphaned datastore tables. When datastore_delete is called
+        # without filters, it does a drop table cascade
+        drop_count = 0
+        for resource_id in resource_id_list:
+            try:
+                portal.action.datastore_delete(
+                    resource_id = resource_id,
+                    force = True
+                )
+            except Exception as e:
+                logecho('Cannot delete %s. %s' % (resource_id, str(e)))
+                job_logger.error('Cannot delete %s. %s' % (resource_id, str(e)))
+            else:
+                logecho("Table '%s' dropped)" % resource_id)
+                drop_count += 1
+
+        logecho('Dropped %s tables' % drop_count)
+        job_logger.info('Dropped %s tables' % drop_count)
+
+        return drop_count
+
+
     def readjob(job):
+        '''helper for reading job json file'''
         with open(job) as f:
             try:
                 jobdefn = json.load(f)
@@ -178,9 +241,8 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
                 else:
                     return jobdefn
 
-    # helper for running jobs
     def runjob(job):
-
+        ''' helper for running jobs'''
         inputfiles = glob.glob(job['InputFile'])
         logecho('  %s file/s found for %s: ' %
                 (len(inputfiles), job['InputFile']))
@@ -432,6 +494,10 @@ def datapump(inputdir, processeddir, problemsdir, datecolumn, dateformats,
         logecho('Connected to host %s' % host)
 
     org_list = portal.action.organization_list()
+
+    if purge:
+        if purgedb() > 0:
+            sys.exit()
 
     # process jobs
     jobs = os.scandir(inputdir)

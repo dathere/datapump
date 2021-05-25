@@ -48,24 +48,24 @@ Command line parameters:
 
 ```
 python datapump.py --help
-Usage: datapump.py [OPTIONS]
+default: ./problems]
 
-  Pumps time-series data into CKAN using a simple filesystem-based queueing system.
-
-Options:
-  --inputdir PATH      The directory where the job files are located.  [default: ./input]
-  --processeddir PATH  The directory where successfully processed inputfiles are moved.  [default: ./processed]
-  --problemsdir PATH   The directory where unsuccessful inputfiles are moved.  [default: ./problems]
   --datecolumn TEXT    The name of the datetime column.  [default: DateTime]
-  --dateformats TEXT   List of dateparser format strings to try one by one. See https://dateparser.readthedocs.io
-                       [default: %y-%m-%d %H:%M:%S, %y/%m/%d %H:%M:%S, %Y-%m-%d %H:%M:%S, %Y/%m/%d %H:%M:%S]
+  --dateformats TEXT   List of dateparser format strings to try one by one.
+                       See https://dateparser.readthedocs.io  [default:
+                       %y-%m-%d %H:%M:%S, %y/%m/%d %H:%M:%S, %Y-%m-%d
+                       %H:%M:%S, %Y/%m/%d %H:%M:%S]
 
   --host TEXT          CKAN host.  [required]
   --apikey TEXT        CKAN api key to use.  [required]
   --verbose            Show more information while processing.
   --debug              Show debugging messages.
-  --logfile PATH       The full path of the main log file.  [default: ./datapump.log]
+  --logfile PATH       The full path of the main log file.  [default:
+                       ./datapump.log]
+
+  --purge              Purge orphaned resources from the datastore.
   --config FILE        Read configuration from FILE.
+  --version            Show the version and exit.
   --help               Show this message and exit.
 ```
 
